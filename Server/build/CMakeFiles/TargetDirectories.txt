@@ -1,0 +1,3 @@
+/home/ubuntu/StreamingServer/Server/build/CMakeFiles/Server.dir
+/home/ubuntu/StreamingServer/Server/build/CMakeFiles/edit_cache.dir
+/home/ubuntu/StreamingServer/Server/build/CMakeFiles/rebuild_cache.dir

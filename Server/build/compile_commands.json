@@ -1,0 +1,8 @@
+[
+{
+  "directory": "/home/ubuntu/StreamingServer/Server/build",
+  "command": "/usr/bin/c++ -isystem /home/ubuntu/StreamingServer/Server/vcpkg_installed/x64-linux/include -g -o CMakeFiles/Server.dir/main.cpp.o -c /home/ubuntu/StreamingServer/Server/main.cpp",
+  "file": "/home/ubuntu/StreamingServer/Server/main.cpp",
+  "output": "CMakeFiles/Server.dir/main.cpp.o"
+}
+]
