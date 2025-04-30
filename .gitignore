@@ -1,3 +1,6 @@
+Cert/*
+!Cert/.gitkeep
+
 # Prerequisites
 *.d
 
