@@ -1,0 +1,15 @@
+{
+    "version": 2,
+    "configurePresets": [
+      {
+        "name": "default",
+        "inherits": "vcpkg",
+        "environment": {
+          "VCPKG_ROOT": "/home/ubuntu/vcpkg"
+        },
+        "cacheVariables": {
+            "VCPKG_INSTALLED_DIR" : "${sourceDir}/vcpkg_installed"
+        }
+      }
+    ]
+  }
