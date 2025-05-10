@@ -347,7 +347,7 @@ void runServer() {
 //https://github.com/microsoft/msquic/blob/main/src/tools/sample/sample.c (예제)
 int main()
 {
-    VideoEncoder vid("/home/ubuntu/Sample/sample.mp4");
+    // VideoEncoder vid("/home/ubuntu/Sample/sample.mp4");
     // MSQUIC API 테이블을 생성한다. 버전은 1과 2가 있는데 1은 사용 중지되었다.
     // 생성이 잘 되었는지 unsigned int를 반환하는데 이것을 QUIC_FAILED, QUIC_SUCCEEDED에서 확인할 수 있다.
     if(QUIC_FAILED(MsQuicOpen2(&MsQuic))) {
