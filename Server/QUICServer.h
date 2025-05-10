@@ -18,6 +18,10 @@ constexpr char Cert[] = "/home/ubuntu/StreamingServer/Cert/Server.crt";
 constexpr char KeyFile[] = "/home/ubuntu/StreamingServer/Cert/privkey-Server.pem";
 #endif
 
+#ifndef UNREFERENCED_PARAMETER
+#define UNREFERENCED_PARAMETER(P) (void)(P)
+#endif
+
 //log 기록을 위한 환경변수명. 동작을 위해서는 같은 이름의 환경변수를 OS에 등록해주어야한다.
 constexpr char                      SslKeyLogEnvVar[] = "SSLKEYLOGFILE";
 constexpr QUIC_REGISTRATION_CONFIG  RegConfig = {"Server 1.3", QUIC_EXECUTION_PROFILE_LOW_LATENCY};
