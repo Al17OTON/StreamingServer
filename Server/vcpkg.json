@@ -1,6 +1,21 @@
 {
   "dependencies": [
+<<<<<<< Updated upstream
     "fmt",
     "msquic"
+=======
+    {
+      "name": "msquic",
+      "features": [ 
+        "0-rtt" 
+      ]
+    },
+    {
+      "name": "ffmpeg",
+      "features": [
+        "x264"
+      ]
+    }
+>>>>>>> Stashed changes
   ]
 }
