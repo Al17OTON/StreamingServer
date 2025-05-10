@@ -1,9 +1,5 @@
 {
   "dependencies": [
-<<<<<<< Updated upstream
-    "fmt",
-    "msquic"
-=======
     {
       "name": "msquic",
       "features": [ 
@@ -16,6 +12,5 @@
         "x264"
       ]
     }
->>>>>>> Stashed changes
   ]
 }

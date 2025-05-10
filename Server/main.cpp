@@ -1,11 +1,3 @@
-<<<<<<< Updated upstream
-#include <fmt/core.h>
-#include <msquic.h>
-int main()
-{
-    fmt::print("Hello World212312323!\n");
-    return 0;
-=======
 // #include <msquic.h>
 // #include <stdio.h>
 // #include <libavcodec/avcodec.h>
@@ -403,5 +395,4 @@ int main() {
     if(server.IsOk()) {
         server.ServerStart();
     }
->>>>>>> Stashed changes
 }
