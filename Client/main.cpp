@@ -1,10 +1,33 @@
 #include <stdio.h>
+#include <cstdlib>
+#include <share.h>
 #include <msquic.h>
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
+#include <opencv2/highgui.hpp>
+
 #ifndef UNREFERENCED_PARAMETER
 #define UNREFERENCED_PARAMETER(P) (void)(P)
 #endif
 
-#define SERVER_IP "172.17.0.2"
+// #define SERVER_IP "172.17.0.2"
+// #define SERVER_IP "127.0.0.1"
+// #define SERVER_IP "118.42.47.159"
+#define SERVER_DOMAIN "albertlim.duckdns.org"
+
+#if defined(_WIN32) || defined(_WIN64)
+// MSQUIC는 OpenSSL를 사용할 경우 ca 파일을 지정해줘야한다고 한다.
+// SCHANNEL은 그럴필요 없다고 한다.
+// 참고로 윈도우는 기본 SCHANNEL이다. 현재 0-rtt를 활성화했기 때문에 openssl로 설정되어있다.
+constexpr char CAFile[] = "C:\\Program Files\\Git\\mingw64\\etc\\ssl\\certs\\ca-bundle.crt";
+#elif defined(__linux__)
+constexpr char CAFile[] = "/etc/ssl/certs/ca-certificates.crt";
+#endif
+
+// 서버와 연결시 인증서를 검증할 것이라면 1, 그렇지 않다면 0
+// 검증하지 않아도 통신 자체는 암호화 되지만 MITM(Man-in-the-Middle) 공격에 취약해진다.
+#define CA_VERIFY 1
 
 // QUIC API 객체. MSQUIC를 사용하기 위한 모든 함수를 가지고 있다.
 const QUIC_API_TABLE* MsQuic = NULL;
@@ -22,7 +45,7 @@ const QUIC_BUFFER Alpn[] = {
     { sizeof("h3")-1, (uint8_t*)"h3" },          // 정식 HTTP/3
     { sizeof("sample")-1, (uint8_t*)"sample" }
 };
-const uint16_t UdpPort = 4567;
+const uint16_t UdpPort = 3333;
 const uint64_t IdleTimeoutMs = 1000;
 const uint32_t SendBufferLength = 100;
 
@@ -367,8 +390,22 @@ bool configuration(bool secure)
     memset(&CredConfig, 0, sizeof(CredConfig));
     CredConfig.Type = QUIC_CREDENTIAL_TYPE_NONE;
     CredConfig.Flags = QUIC_CREDENTIAL_FLAG_CLIENT;
-    if(!secure) CredConfig.Flags |= QUIC_CREDENTIAL_FLAG_NO_CERTIFICATE_VALIDATION;
-
+    
+    if(!secure) {
+        CredConfig.Flags |= QUIC_CREDENTIAL_FLAG_NO_CERTIFICATE_VALIDATION;
+        printf("-------CA Verification disabled.-------\n");
+    }
+    else {
+        // QUIC_CREDENTIAL_FLAG_USE_TLS_BUILTIN_CERTIFICATE_VALIDATION - OpenSSL의 기본 검증을 사용 (SCHANNEL의 경우 무용지물)
+        // QUIC_CREDENTIAL_FLAG_SET_CA_CERTIFICATE_FILE - CA 파일을 사용하겠다고 명시
+        // 윈도우에서 OpenSSL 사용시 모두 활성화 해줘야한다.
+        CredConfig.Flags |= QUIC_CREDENTIAL_FLAG_USE_TLS_BUILTIN_CERTIFICATE_VALIDATION
+                            | QUIC_CREDENTIAL_FLAG_SET_CA_CERTIFICATE_FILE;
+                            
+        // CA 파일 지정 (윈도우의 경우)
+        CredConfig.CaCertificateFile = (char*)CAFile;
+        printf("-------CA Verification enabled.-------\n");
+    }
 
     //
     // Allocate/initialize the configuration object, with the configured ALPN
@@ -395,7 +432,9 @@ void runClient() {
     //
     // Load the client configuration based on the "unsecure" command line option.
     //
-    if (!configuration(false)) {
+    // 서버와 연결시 인증서를 검증할 것이라면 true, 그렇지 않다면 false
+    // 검증하지 않아도 통신 자체는 암호화 되지만 MITM(Man-in-the-Middle) 공격에 취약해진다.
+    if (!configuration(CA_VERIFY)) {
         return;
     }
 
@@ -436,7 +475,9 @@ void runClient() {
     // Get the target / server name or IP from the command line.
     //
     const char* Target;
-    Target = SERVER_IP;
+    // Target = SERVER_IP;
+    Target = SERVER_DOMAIN;
+
     // if ((Target = GetValue(argc, argv, "target")) == NULL) {
     //     printf("Must specify '-target' argument!\n");
     //     Status = QUIC_STATUS_INVALID_PARAMETER;
@@ -463,6 +504,7 @@ void runClient() {
 
 int main()
 {
+    cv::Mat img;
     if (QUIC_FAILED(MsQuicOpen2(&MsQuic))) {
         printf("MsQuicOpen2 failed!\n");
         goto Error;
@@ -486,6 +528,7 @@ int main()
             }
             MsQuicClose(MsQuic);
         }
+
     
     printf("Client Exited\n");
     return 0;
