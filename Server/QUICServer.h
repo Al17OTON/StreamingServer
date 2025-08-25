@@ -14,8 +14,10 @@
 constexpr char Cert[] = "C:\\Users\\byung\\Desktop\\Streaming\\StreamingServer\\Cert\\Server\\Server.crt";
 constexpr char KeyFile[] = "C:\\Users\\byung\\Desktop\\Streaming\\StreamingServer\\Cert\\Server\\privkey-Server.pem";
 #elif defined(__linux__)
-constexpr char Cert[] = "/home/ubuntu/StreamingServer/Cert/Server.crt";
-constexpr char KeyFile[] = "/home/ubuntu/StreamingServer/Cert/privkey-Server.pem";
+// constexpr char Cert[] = "/home/ubuntu/StreamingServer/Cert/Server.crt";
+// constexpr char KeyFile[] = "/home/ubuntu/StreamingServer/Cert/privkey-Server.pem";
+constexpr char Cert[] = "/home/ubuntu/StreamingServer/Cert/fullchain2.pem";
+constexpr char KeyFile[] = "/home/ubuntu/StreamingServer/Cert/privkey2.pem";
 #endif
 
 #ifndef UNREFERENCED_PARAMETER
@@ -51,7 +53,7 @@ static HQUIC                        Configuration;
 QUIC_TLS_SECRETS                    ClientSecrets = {0};    
 
 const static uint16_t               UdpPort = 12340;
-const static uint64_t               IdleTimeoutMs = 1000;
+const static uint64_t               IdleTimeoutMs = 30000;
 const static uint32_t               SendBufferLength = 15000;
 
 // 서버가 정상적으로 동작하는지 체크하는 함수
