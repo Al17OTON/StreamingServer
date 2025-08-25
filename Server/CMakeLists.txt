@@ -4,6 +4,7 @@ project(Server)
 
 find_package(FFMPEG REQUIRED)
 find_package(msquic CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 add_executable(Server main.cpp QUICServer.cpp)
 
@@ -11,3 +12,4 @@ target_link_libraries(Server PRIVATE msquic)
 target_include_directories(Server PRIVATE ${FFMPEG_INCLUDE_DIRS})
 target_link_directories(Server PRIVATE ${FFMPEG_LIBRARY_DIRS})
 target_link_libraries(Server PRIVATE ${FFMPEG_LIBRARIES})
+target_link_libraries(Server PRIVATE nlohmann_json::nlohmann_json)

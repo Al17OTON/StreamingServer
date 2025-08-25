@@ -1,16 +1,17 @@
 {
   "dependencies": [
     {
-      "name": "msquic",
-      "features": [ 
-        "0-rtt" 
-      ]
-    },
-    {
       "name": "ffmpeg",
       "features": [
         "x264"
       ]
-    }
+    },
+    {
+      "name": "msquic",
+      "features": [
+        "0-rtt"
+      ]
+    },
+    "nlohmann-json"
   ]
 }
