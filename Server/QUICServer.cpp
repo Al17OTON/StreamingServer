@@ -49,13 +49,22 @@ QUIC_STATUS QUIC_API QUICServer::ServerStreamCallback(HQUIC Stream, void *Contex
         // Data was received from the peer on the stream.
         //
         printf("[strm][%p] Data received\n", Stream);
+        
+        for(int i = 0; i < Event->RECEIVE.BufferCount; ++i) {
+            const QUIC_BUFFER& b = Event->RECEIVE.Buffers[i];
+            printf("[srv][%p] %.*s\n", Stream, (int)b.Length, (const char*)b.Buffer);
+        }
+        if (Event->RECEIVE.Flags & QUIC_RECEIVE_FLAG_FIN) {
+            printf("\n[srv][%p] <FIN received>\n", Stream);
+        }
+
         break;
     case QUIC_STREAM_EVENT_PEER_SEND_SHUTDOWN:
         //
         // The peer gracefully shut down its send direction of the stream.
         //
         printf("[strm][%p] Peer shut down\n", Stream);
-        ServerSend(Stream);
+        // ServerSend(Stream);
         break;
     case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
         //
@@ -175,6 +184,10 @@ bool QUICServer::SetConfiguration()
     // 양방향 연결을 허용한다. 기본적으로는 peer로부터의 스트림을 허용하지 않는다.
     Settings.PeerBidiStreamCount = 1;
     Settings.IsSet.PeerBidiStreamCount = TRUE;
+
+    // Datagram 활성화
+    Settings.DatagramReceiveEnabled = TRUE;
+    Settings.IsSet.DatagramReceiveEnabled = TRUE;
 
     QUIC_CREDENTIAL_CONFIG_HELPER Config;
     memset(&Config, 0, sizeof(Config));
