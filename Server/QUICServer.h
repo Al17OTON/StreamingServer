@@ -24,6 +24,30 @@ constexpr char KeyFile[] = "/home/ubuntu/StreamingServer/Cert/privkey2.pem";
 #define UNREFERENCED_PARAMETER(P) (void)(P)
 #endif
 
+// Setting 값 - SetConfiguration에서 사용
+// SET이 붙은 것은 활성화 여부
+// TRUE - 사용자 설정, FALSE - Default 사용
+#define IDLE_TIME_OUT_MS                    30000
+#define IDLE_TIME_OUT_MS_SET                TRUE
+
+#define SERVER_RESUMPTION_LEVEL             QUIC_SERVER_RESUME_AND_ZERORTT
+#define SERVER_RESUMPTION_LEVEL_SET         TRUE
+
+#define PEER_BIDISTREAM_COUNT               64
+#define PEER_BIDISTREAM_COUNT_SET           TRUE
+
+#define PEER_UNIDISTREAM_COUNT              64
+#define PEER_UNIDISTREAM_COUNT_SET          TRUE
+
+#define DATAGRAM_RECEIVE_ENABLED            TRUE
+#define DATAGRAM_RECEIVE_ENABLED_SET        TRUE
+
+// 서버가 사용할 포트
+// QUIC가 UDP 기반이므로 UDP로 열어줘야 한다.
+#define SERVER_PORT                         12340
+
+
+
 //log 기록을 위한 환경변수명. 동작을 위해서는 같은 이름의 환경변수를 OS에 등록해주어야한다.
 constexpr char                      SslKeyLogEnvVar[] = "SSLKEYLOGFILE";
 constexpr QUIC_REGISTRATION_CONFIG  RegConfig = {"Server 1.3", QUIC_EXECUTION_PROFILE_LOW_LATENCY};
@@ -52,8 +76,8 @@ static HQUIC                        Registration;
 static HQUIC                        Configuration;
 QUIC_TLS_SECRETS                    ClientSecrets = {0};    
 
-const static uint16_t               UdpPort = 12340;
-const static uint64_t               IdleTimeoutMs = 30000;
+// 예제에서 사용하는 버퍼 크기
+// 실제로는 데이터 크기에 맞추어 버퍼를 정한다.
 const static uint32_t               SendBufferLength = 15000;
 
 // 서버가 정상적으로 동작하는지 체크하는 함수

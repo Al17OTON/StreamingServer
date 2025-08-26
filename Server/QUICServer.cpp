@@ -139,6 +139,9 @@ QUIC_STATUS QUIC_API QUICServer::ServerConnectionCallback(HQUIC Connection, void
         //
         printf("[conn][%p] Connection resumed!\n", Connection);
         break;
+    case QUIC_CONNECTION_EVENT_DATAGRAM_RECEIVED:
+        printf("[dagr] Data Received (%d bytes) : %.*s\n", (int)Event->DATAGRAM_RECEIVED.Buffer->Length, (int)Event->DATAGRAM_RECEIVED.Buffer->Length, (const char*)Event->DATAGRAM_RECEIVED.Buffer->Buffer);
+        break;
     default:
         break;
     }
@@ -176,18 +179,22 @@ bool QUICServer::SetConfiguration()
 {
     QUIC_SETTINGS Settings = {0};
     // timeout 설정
-    Settings.IdleTimeoutMs = IdleTimeoutMs;
-    Settings.IsSet.IdleTimeoutMs = TRUE;
+    Settings.IdleTimeoutMs = IDLE_TIME_OUT_MS;
+    Settings.IsSet.IdleTimeoutMs = IDLE_TIME_OUT_MS_SET;
     // 0 RTT 설정
-    Settings.ServerResumptionLevel = QUIC_SERVER_RESUME_AND_ZERORTT;
-    Settings.IsSet.ServerResumptionLevel = TRUE;
+    Settings.ServerResumptionLevel = SERVER_RESUMPTION_LEVEL;
+    Settings.IsSet.ServerResumptionLevel = SERVER_RESUMPTION_LEVEL_SET;
     // 양방향 연결을 허용한다. 기본적으로는 peer로부터의 스트림을 허용하지 않는다.
-    Settings.PeerBidiStreamCount = 1;
-    Settings.IsSet.PeerBidiStreamCount = TRUE;
+    Settings.PeerBidiStreamCount = PEER_BIDISTREAM_COUNT;
+    Settings.IsSet.PeerBidiStreamCount = PEER_BIDISTREAM_COUNT_SET;
+
+    // 단방향 통신 연결 허용
+    Settings.PeerUnidiStreamCount = PEER_UNIDISTREAM_COUNT;
+    Settings.IsSet.PeerUnidiStreamCount = PEER_UNIDISTREAM_COUNT_SET;
 
     // Datagram 활성화
-    Settings.DatagramReceiveEnabled = TRUE;
-    Settings.IsSet.DatagramReceiveEnabled = TRUE;
+    Settings.DatagramReceiveEnabled = DATAGRAM_RECEIVE_ENABLED;
+    Settings.IsSet.DatagramReceiveEnabled = DATAGRAM_RECEIVE_ENABLED_SET;
 
     QUIC_CREDENTIAL_CONFIG_HELPER Config;
     memset(&Config, 0, sizeof(Config));
@@ -281,7 +288,7 @@ void QUICServer::ServerStart()
     HQUIC Listener = NULL;
     QUIC_ADDR Address = {0}; // 내부를 보면 공용체로 sockaddr 구조체들을 가지고 있다.
     QuicAddrSetFamily(&Address, QUIC_ADDRESS_FAMILY_UNSPEC);
-    QuicAddrSetPort(&Address, UdpPort);
+    QuicAddrSetPort(&Address, SERVER_PORT);
 
     // 리스너 객체 할당
     // 서버가 quic 통신을 받기 위해서는 ListenerOpen을 통해 관련 자원을 할당해야한다.
@@ -304,7 +311,7 @@ void QUICServer::ServerStart()
         goto Error;
     }
 
-    printf("Server Started and Listening on Port : %d\n", UdpPort);
+    printf("Server Started and Listening on Port : %d\n", SERVER_PORT);
     //
     // Continue listening for connections until the Enter key is pressed.
     //
