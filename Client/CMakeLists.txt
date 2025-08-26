@@ -4,8 +4,10 @@ project(Client)
 
 find_package(msquic CONFIG REQUIRED)
 find_package(OpenCV CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
-add_executable(Client main.cpp)
+add_executable(Client main.cpp WebCam.cpp QUICClient.cpp)
 
 target_link_libraries(Client PRIVATE msquic)
 target_link_libraries(Client PRIVATE opencv_core opencv_imgproc opencv_imgcodecs opencv_highgui)
+target_link_libraries(Client PRIVATE nlohmann_json::nlohmann_json)
