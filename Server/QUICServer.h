@@ -2,6 +2,7 @@
 #include <msquic.h>
 #include <stdio.h>
 #include <cstdlib>
+#include <filesystem>
 
 //https://github.com/microsoft/msquic/blob/main/docs/API.md
 //https://github.com/microsoft/msquic/blob/main/src/tools/sample/sample.c (예제)
@@ -11,13 +12,11 @@
 // 윈도우에서는 별도의 설정이 없다면 Schannel 기반으로 빌드가 된다.
 // vcpkg에서 0-rtt를 활성화 하면 openssl 기반으로 빌드가 된다.
 #if defined(_WIN32) || defined(_WIN64)
-constexpr char Cert[] = "C:\\Users\\byung\\Desktop\\Streaming\\StreamingServer\\Cert\\Server\\Server.crt";
-constexpr char KeyFile[] = "C:\\Users\\byung\\Desktop\\Streaming\\StreamingServer\\Cert\\Server\\privkey-Server.pem";
+constexpr char Cert[] = PROJECT_ROOT "\\..\\Cert\\Server\\Server.crt";
+constexpr char KeyFile[] = PROJECT_ROOT "\\..\\Cert\\Server\\privkey-Server.pem";
 #elif defined(__linux__)
-// constexpr char Cert[] = "/home/ubuntu/StreamingServer/Cert/Server.crt";
-// constexpr char KeyFile[] = "/home/ubuntu/StreamingServer/Cert/privkey-Server.pem";
-constexpr char Cert[] = "/home/ubuntu/StreamingServer/Cert/fullchain2.pem";
-constexpr char KeyFile[] = "/home/ubuntu/StreamingServer/Cert/privkey2.pem";
+constexpr char Cert[] = PROJECT_ROOT "/../Cert/fullchain2.pem";
+constexpr char KeyFile[] = PROJECT_ROOT "/../Cert/privkey2.pem";
 #endif
 
 #ifndef UNREFERENCED_PARAMETER

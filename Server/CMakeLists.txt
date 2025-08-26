@@ -13,3 +13,5 @@ target_include_directories(Server PRIVATE ${FFMPEG_INCLUDE_DIRS})
 target_link_directories(Server PRIVATE ${FFMPEG_LIBRARY_DIRS})
 target_link_libraries(Server PRIVATE ${FFMPEG_LIBRARIES})
 target_link_libraries(Server PRIVATE nlohmann_json::nlohmann_json)
+
+add_compile_definitions(PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
