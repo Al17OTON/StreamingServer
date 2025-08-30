@@ -7,7 +7,7 @@ find_package(OpenCV CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(nghttp3 CONFIG REQUIRED)
 
-add_executable(Client main.cpp WebCam.cpp QUICClient.cpp)
+add_executable(Client main.cpp WebCam.cpp QUICClient.cpp ClientConnectionContext.cpp)
 
 target_link_libraries(Client PRIVATE msquic)
 target_link_libraries(Client PRIVATE opencv_core opencv_imgproc opencv_imgcodecs opencv_highgui)
