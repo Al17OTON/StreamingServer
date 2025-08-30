@@ -1,26 +1,24 @@
-#include "ConnectionContext.h"
+#include "ServerConnectionContext.h"
 
 /// @brief Connection의 Stream 객체들을 관리하는 클래스. 생성자에서는 상수값을 설정한다. 후에 연결이 완료되면 ConnectionContextInit()을 호출해야한다.
 /// @param ms_quic 
 /// @param quic_connection 
-ConnectionContext::ConnectionContext(const QUIC_API_TABLE *ms_quic, HQUIC quic_connection)
+ServerConnectionContext::ServerConnectionContext(const QUIC_API_TABLE *ms_quic, HQUIC quic_connection)
 : ms_quic(ms_quic)
 , quic_connection(quic_connection)
 {
-    
+    stream_map = new StreamMap(ms_quic);
 }
 
-ConnectionContext::~ConnectionContext()
+ServerConnectionContext::~ServerConnectionContext()
 {
     delete stream_map;
 }
 
 /// @brief Connection Complete 이벤트에서 호출 http3에서 필요한 변수들을 할당한다.
 /// @return 
-bool ConnectionContext::ConnectionContextInit()
+bool ServerConnectionContext::Http3Init()
 {
-    stream_map = new StreamMap(ms_quic);
-
     if(
            !OpenStream(StreamTypes::UNIDIRECTION, http3_control_stream_id)
         || !OpenStream(StreamTypes::UNIDIRECTION, http3_qpack_encoder_stream_id)
@@ -39,7 +37,7 @@ bool ConnectionContext::ConnectionContextInit()
 /// @brief 스트림 생성 후 반환
 /// @param stream_type 양방향, 단방향 여부 
 /// @return 스트림 객체를 반환한다. 실패한 경우 nullptr 반환
-HQUIC ConnectionContext::GetStream(StreamTypes stream_type)
+HQUIC ServerConnectionContext::GetStream(StreamTypes stream_type)
 {
     QUIC_STATUS status;
     HQUIC stream = NULL;
@@ -69,7 +67,7 @@ HQUIC ConnectionContext::GetStream(StreamTypes stream_type)
 /// @param stream_type 단방향, 양방향 여부 결정
 /// @param stream_id 스트림 아이디를 받을 포인터
 /// @return 스트림 생성 여부 반환
-bool ConnectionContext::OpenStream(StreamTypes stream_type, uint64_t& stream_id)
+bool ServerConnectionContext::OpenStream(StreamTypes stream_type, uint64_t& stream_id)
 {
     HQUIC stream = GetStream(stream_type);
     if(stream == nullptr) return false;
@@ -86,9 +84,9 @@ bool ConnectionContext::OpenStream(StreamTypes stream_type, uint64_t& stream_id)
 /// @param context 
 /// @param event 
 /// @return 
-QUIC_STATUS QUIC_API ConnectionContext::ServerStreamCallback(HQUIC stream, void *context, QUIC_STREAM_EVENT *event)
+QUIC_STATUS QUIC_API ServerConnectionContext::ServerStreamCallback(HQUIC stream, void *context, QUIC_STREAM_EVENT *event)
 {
-    ConnectionContext* this_context = (ConnectionContext*)context;
+    ServerConnectionContext* this_context = (ServerConnectionContext*)context;
     switch (event->Type) {
     case QUIC_STREAM_EVENT_SEND_COMPLETE:
         //
@@ -141,9 +139,9 @@ QUIC_STATUS QUIC_API ConnectionContext::ServerStreamCallback(HQUIC stream, void 
     return QUIC_STATUS_SUCCESS;
 }
 
-QUIC_STATUS QUIC_API ConnectionContext::ServerConnectionCallback(HQUIC connection, void *context, QUIC_CONNECTION_EVENT *event)
+QUIC_STATUS QUIC_API ServerConnectionContext::ServerConnectionCallback(HQUIC connection, void *context, QUIC_CONNECTION_EVENT *event)
 {
-    ConnectionContext* this_context = (ConnectionContext*)context;
+    ServerConnectionContext* this_context = (ServerConnectionContext*)context;
 
     switch (event->Type) {
     case QUIC_CONNECTION_EVENT_CONNECTED:
@@ -152,7 +150,7 @@ QUIC_STATUS QUIC_API ConnectionContext::ServerConnectionCallback(HQUIC connectio
         //
         printf("[conn][%p] Connected\n", connection);
         this_context->ms_quic->ConnectionSendResumptionTicket(connection, QUIC_SEND_RESUMPTION_FLAG_NONE, 0, NULL);
-        this_context->ConnectionContextInit();
+        this_context->Http3Init();
         break;
     case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:
         //

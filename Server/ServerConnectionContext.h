@@ -10,7 +10,7 @@ enum class StreamTypes : uint8_t {
         UNIDIRECTION
     };
 
-class ConnectionContext {
+class ServerConnectionContext {
 private:
     StreamMap*                      stream_map;
 
@@ -46,9 +46,9 @@ private:
     }
 public:
     const QUIC_API_TABLE*           ms_quic;
-    ConnectionContext(_In_ const QUIC_API_TABLE* ms_quic, _In_ HQUIC quic_connection);
-    ~ConnectionContext();
-    bool ConnectionContextInit();
+    ServerConnectionContext(_In_ const QUIC_API_TABLE* ms_quic, _In_ HQUIC quic_connection);
+    ~ServerConnectionContext();
+    bool Http3Init();
 
     // 클라이언트와 연결되었을 때(QUIC handshake 종료 후) 수행할 동작 정의
     static

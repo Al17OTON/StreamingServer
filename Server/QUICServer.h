@@ -2,7 +2,7 @@
 #include <msquic.h>
 #include <stdio.h>
 #include <cstdlib>
-#include "ConnectionContext.h"
+#include "ServerConnectionContext.h"
 
 //https://github.com/microsoft/msquic/blob/main/docs/API.md
 //https://github.com/microsoft/msquic/blob/main/src/tools/sample/sample.c (예제)

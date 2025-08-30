@@ -1,5 +1,4 @@
 #include "QUICServer.h"
-#include "ConnectionContext.h"
 
 QUICServer::QUICServer()
 {
@@ -44,7 +43,7 @@ QUIC_STATUS QUIC_API QUICServer::ServerListenerCallback(HQUIC listener, void *co
         // app MUST set the callback handler before returning.
         //
         // 콜백을 지정된 HQUIC 객체에 적용한다. (리스너, 스트림, 등등)
-        this_context->ms_quic->SetCallbackHandler(event->NEW_CONNECTION.Connection, (void*)ConnectionContext::ServerConnectionCallback, new ConnectionContext(this_context->ms_quic, event->NEW_CONNECTION.Connection));
+        this_context->ms_quic->SetCallbackHandler(event->NEW_CONNECTION.Connection, (void*)ServerConnectionContext::ServerConnectionCallback, new ServerConnectionContext(this_context->ms_quic, event->NEW_CONNECTION.Connection));
         // 클라이언트가 연결을 시도하고 있으므로 QUIC Handshake를 하도록 설정한다.
         // QUIC_LISTENER_EVENT_NEW_CONNECTION 내부에서 사용할 것을 권장하며 
         // 어떠한 설정을 사용할지 결정하는 비동기 작업을 수행 등과 같은 경우에는 외부에서 호출해도 된다고 한다.

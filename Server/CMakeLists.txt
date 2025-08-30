@@ -7,7 +7,7 @@ find_package(msquic CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(nghttp3 CONFIG REQUIRED)
 
-add_executable(Server main.cpp QUICServer.cpp ConnectionContext.cpp)
+add_executable(Server main.cpp QUICServer.cpp ServerConnectionContext.cpp)
 
 target_link_libraries(Server PRIVATE msquic)
 target_include_directories(Server PRIVATE ${FFMPEG_INCLUDE_DIRS})
