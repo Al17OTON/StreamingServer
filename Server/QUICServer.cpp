@@ -1,24 +1,21 @@
 #include "QUICServer.h"
-
-const QUIC_API_TABLE* QUICServer::MsQuic      = nullptr;
-HQUIC                QUICServer::Registration = nullptr;
-HQUIC                QUICServer::Configuration = nullptr;
+#include "ConnectionContext.h"
 
 QUICServer::QUICServer()
 {
-    if(Ok) {
+    if(ok) {
         printf("Server is Already on.\n");
         return;
     }
     // VideoEncoder vid("/home/ubuntu/Sample/sample.mp4");
     // MSQUIC API 테이블을 생성한다. 버전은 1과 2가 있는데 1은 사용 중지되었다.
     // 생성이 잘 되었는지 unsigned int를 반환하는데 이것을 QUIC_FAILED, QUIC_SUCCEEDED에서 확인할 수 있다.
-    if(QUIC_FAILED(MsQuicOpen2(&MsQuic))) {
+    if(QUIC_FAILED(MsQuicOpen2(&ms_quic))) {
         printf("QUIC Open Fail\n");
         return;
     }
 
-    if(QUIC_FAILED(MsQuic->RegistrationOpen(&RegConfig, &Registration))) {
+    if(QUIC_FAILED(ms_quic->RegistrationOpen(&reg_config, &registration))) {
         printf("RegistrationOpen Fail\n");
         return;
     }
@@ -29,133 +26,17 @@ QUICServer::QUICServer()
 
     // printf("Server Started and Listening on Port : %d\n", UdpPort);
     printf("Server Init Success\n");
-    Ok = true;
-}
-
-QUIC_STATUS QUIC_API QUICServer::ServerStreamCallback(HQUIC Stream, void *Context, QUIC_STREAM_EVENT *Event)
-{
-    UNREFERENCED_PARAMETER(Context);
-    switch (Event->Type) {
-    case QUIC_STREAM_EVENT_SEND_COMPLETE:
-        //
-        // A previous StreamSend call has completed, and the context is being
-        // returned back to the app.
-        //
-        free(Event->SEND_COMPLETE.ClientContext);
-        printf("[strm][%p] Data sent\n", Stream);
-        break;
-    case QUIC_STREAM_EVENT_RECEIVE:
-        //
-        // Data was received from the peer on the stream.
-        //
-        printf("[strm][%p] Data received\n", Stream);
-        
-        for(int i = 0; i < Event->RECEIVE.BufferCount; ++i) {
-            const QUIC_BUFFER& b = Event->RECEIVE.Buffers[i];
-            printf("[srv][%p] %.*s\n", Stream, (int)b.Length, (const char*)b.Buffer);
-        }
-        if (Event->RECEIVE.Flags & QUIC_RECEIVE_FLAG_FIN) {
-            printf("\n[srv][%p] <FIN received>\n", Stream);
-        }
-
-        break;
-    case QUIC_STREAM_EVENT_PEER_SEND_SHUTDOWN:
-        //
-        // The peer gracefully shut down its send direction of the stream.
-        //
-        printf("[strm][%p] Peer shut down\n", Stream);
-        // ServerSend(Stream);
-        break;
-    case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
-        //
-        // The peer aborted its send direction of the stream.
-        //
-        printf("[strm][%p] Peer aborted\n", Stream);
-        MsQuic->StreamShutdown(Stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
-        break;
-    case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE:
-        //
-        // Both directions of the stream have been shut down and MsQuic is done
-        // with the stream. It can now be safely cleaned up.
-        //
-        printf("[strm][%p] All done\n", Stream);
-        MsQuic->StreamClose(Stream);
-        break;
-    default:
-        break;
-    }
-    return QUIC_STATUS_SUCCESS;
-}
-
-QUIC_STATUS QUIC_API QUICServer::ServerConnectionCallback(HQUIC Connection, void *Context, QUIC_CONNECTION_EVENT *Event)
-{
-    UNREFERENCED_PARAMETER(Context);
-    switch (Event->Type) {
-    case QUIC_CONNECTION_EVENT_CONNECTED:
-        //
-        // The handshake has completed for the connection.
-        //
-        printf("[conn][%p] Connected\n", Connection);
-        MsQuic->ConnectionSendResumptionTicket(Connection, QUIC_SEND_RESUMPTION_FLAG_NONE, 0, NULL);
-        break;
-    case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:
-        //
-        // The connection has been shut down by the transport. Generally, this
-        // is the expected way for the connection to shut down with this
-        // protocol, since we let idle timeout kill the connection.
-        //
-        if (Event->SHUTDOWN_INITIATED_BY_TRANSPORT.Status == QUIC_STATUS_CONNECTION_IDLE) {
-            printf("[conn][%p] Successfully shut down on idle.\n", Connection);
-        } else {
-            printf("[conn][%p] Shut down by transport, 0x%x\n", Connection, Event->SHUTDOWN_INITIATED_BY_TRANSPORT.Status);
-        }
-        break;
-    case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_PEER:
-        //
-        // The connection was explicitly shut down by the peer.
-        //
-        printf("[conn][%p] Shut down by peer, 0x%llu\n", Connection, (unsigned long long)Event->SHUTDOWN_INITIATED_BY_PEER.ErrorCode);
-        break;
-    case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE:
-        //
-        // The connection has completed the shutdown process and is ready to be
-        // safely cleaned up.
-        //
-        printf("[conn][%p] All done\n", Connection);
-        MsQuic->ConnectionClose(Connection);
-        break;
-    case QUIC_CONNECTION_EVENT_PEER_STREAM_STARTED:
-        //
-        // The peer has started/created a new stream. The app MUST set the
-        // callback handler before returning.
-        //
-        printf("[strm][%p] Peer started\n", Event->PEER_STREAM_STARTED.Stream);
-        MsQuic->SetCallbackHandler(Event->PEER_STREAM_STARTED.Stream, (void*)ServerStreamCallback, NULL);
-        break;
-    case QUIC_CONNECTION_EVENT_RESUMED:
-        //
-        // The connection succeeded in doing a TLS resumption of a previous
-        // connection's session.
-        //
-        printf("[conn][%p] Connection resumed!\n", Connection);
-        break;
-    case QUIC_CONNECTION_EVENT_DATAGRAM_RECEIVED:
-        printf("[dagr] Data Received (%d bytes) : %.*s\n", (int)Event->DATAGRAM_RECEIVED.Buffer->Length, (int)Event->DATAGRAM_RECEIVED.Buffer->Length, (const char*)Event->DATAGRAM_RECEIVED.Buffer->Buffer);
-        break;
-    default:
-        break;
-    }
-    return QUIC_STATUS_SUCCESS;
+    ok = true;
 }
 
 // listener 콜백함수
 // 클라이언트가 연결을 시도할 때 할 동작을 정의한다.
-QUIC_STATUS QUIC_API QUICServer::ServerListenerCallback(HQUIC Listener, void *Context, QUIC_LISTENER_EVENT *Event)
+QUIC_STATUS QUIC_API QUICServer::ServerListenerCallback(HQUIC listener, void *context, QUIC_LISTENER_EVENT *event)
 {
-    UNREFERENCED_PARAMETER(Listener);
-    UNREFERENCED_PARAMETER(Context);
-    QUIC_STATUS Status = QUIC_STATUS_NOT_SUPPORTED;
-    switch (Event->Type) {
+    QUICServer* this_context = (QUICServer*)context;
+    UNREFERENCED_PARAMETER(listener);
+    QUIC_STATUS status = QUIC_STATUS_NOT_SUPPORTED;
+    switch (event->Type) {
     case QUIC_LISTENER_EVENT_NEW_CONNECTION:
         //
         // A new connection is being attempted by a client. For the handshake to
@@ -163,89 +44,90 @@ QUIC_STATUS QUIC_API QUICServer::ServerListenerCallback(HQUIC Listener, void *Co
         // app MUST set the callback handler before returning.
         //
         // 콜백을 지정된 HQUIC 객체에 적용한다. (리스너, 스트림, 등등)
-        MsQuic->SetCallbackHandler(Event->NEW_CONNECTION.Connection, (void*)ServerConnectionCallback, NULL);
+        this_context->ms_quic->SetCallbackHandler(event->NEW_CONNECTION.Connection, (void*)ConnectionContext::ServerConnectionCallback, new ConnectionContext(this_context->ms_quic, event->NEW_CONNECTION.Connection));
         // 클라이언트가 연결을 시도하고 있으므로 QUIC Handshake를 하도록 설정한다.
         // QUIC_LISTENER_EVENT_NEW_CONNECTION 내부에서 사용할 것을 권장하며 
         // 어떠한 설정을 사용할지 결정하는 비동기 작업을 수행 등과 같은 경우에는 외부에서 호출해도 된다고 한다.
-        Status = MsQuic->ConnectionSetConfiguration(Event->NEW_CONNECTION.Connection, Configuration);
+        status = this_context->ms_quic->ConnectionSetConfiguration(event->NEW_CONNECTION.Connection, this_context->configuration);
         break;
     default:
         break;
     }
-    return Status;
+    return status;
 }
 
 bool QUICServer::SetConfiguration()
 {
-    QUIC_SETTINGS Settings = {0};
+    QUIC_SETTINGS settings = {0};
     // timeout 설정
-    Settings.IdleTimeoutMs = IDLE_TIME_OUT_MS;
-    Settings.IsSet.IdleTimeoutMs = IDLE_TIME_OUT_MS_SET;
+    settings.IdleTimeoutMs = IDLE_TIME_OUT_MS;
+    settings.IsSet.IdleTimeoutMs = IDLE_TIME_OUT_MS_SET;
     // 0 RTT 설정
-    Settings.ServerResumptionLevel = SERVER_RESUMPTION_LEVEL;
-    Settings.IsSet.ServerResumptionLevel = SERVER_RESUMPTION_LEVEL_SET;
+    settings.ServerResumptionLevel = SERVER_RESUMPTION_LEVEL;
+    settings.IsSet.ServerResumptionLevel = SERVER_RESUMPTION_LEVEL_SET;
     // 양방향 연결을 허용한다. 기본적으로는 peer로부터의 스트림을 허용하지 않는다.
-    Settings.PeerBidiStreamCount = PEER_BIDISTREAM_COUNT;
-    Settings.IsSet.PeerBidiStreamCount = PEER_BIDISTREAM_COUNT_SET;
+    settings.PeerBidiStreamCount = PEER_BIDISTREAM_COUNT;
+    settings.IsSet.PeerBidiStreamCount = PEER_BIDISTREAM_COUNT_SET;
 
     // 단방향 통신 연결 허용
-    Settings.PeerUnidiStreamCount = PEER_UNIDISTREAM_COUNT;
-    Settings.IsSet.PeerUnidiStreamCount = PEER_UNIDISTREAM_COUNT_SET;
+    settings.PeerUnidiStreamCount = PEER_UNIDISTREAM_COUNT;
+    settings.IsSet.PeerUnidiStreamCount = PEER_UNIDISTREAM_COUNT_SET;
 
     // Datagram 활성화
-    Settings.DatagramReceiveEnabled = DATAGRAM_RECEIVE_ENABLED;
-    Settings.IsSet.DatagramReceiveEnabled = DATAGRAM_RECEIVE_ENABLED_SET;
+    settings.DatagramReceiveEnabled = DATAGRAM_RECEIVE_ENABLED;
+    settings.IsSet.DatagramReceiveEnabled = DATAGRAM_RECEIVE_ENABLED_SET;
 
-    QUIC_CREDENTIAL_CONFIG_HELPER Config;
-    memset(&Config, 0, sizeof(Config));
-    Config.CredConfig.Flags = QUIC_CREDENTIAL_FLAG_NONE;
+    QUIC_CREDENTIAL_CONFIG_HELPER config;
+    memset(&config, 0, sizeof(config));
+    config.cred_config.Flags = QUIC_CREDENTIAL_FLAG_NONE;
 
-    Config.CertFile.CertificateFile = (char*)Cert;
-    Config.CertFile.PrivateKeyFile = (char*)KeyFile;
-    Config.CredConfig.Type = QUIC_CREDENTIAL_TYPE_CERTIFICATE_FILE;
-    Config.CredConfig.CertificateFile = &Config.CertFile;
+    config.cert_file.CertificateFile = (char*)cert;
+    config.cert_file.PrivateKeyFile = (char*)key_file;
+    config.cred_config.Type = QUIC_CREDENTIAL_TYPE_CERTIFICATE_FILE;
+    config.cred_config.CertificateFile = &config.cert_file;
 
     // 설정 적용
-    QUIC_STATUS Status;
-    if (QUIC_FAILED(Status = MsQuic->ConfigurationOpen(Registration, Alpn, 2, &Settings, sizeof(Settings), NULL, &Configuration))) {
-        printf("ConfigurationOpen failed! code : 0x%x\n", Status);
+    QUIC_STATUS status;
+    if (QUIC_FAILED(status = ms_quic->ConfigurationOpen(registration, alpn, 3, &settings, sizeof(settings), NULL, &configuration))) {
+        printf("ConfigurationOpen failed! code : 0x%x\n", status);
         return false;
     }
 
     // TLS 로드
-    if (QUIC_FAILED(Status = MsQuic->ConfigurationLoadCredential(Configuration, &Config.CredConfig))) {
-        printf("ConfigurationLoadCredential failed! code : 0x%x\n", Status);
+    if (QUIC_FAILED(status = ms_quic->ConfigurationLoadCredential(configuration, &config.cred_config))) {
+        printf("ConfigurationLoadCredential failed! code : 0x%x\n", status);
         return false;
     }
 
     return true;
 }
 
-void QUICServer::ServerSend(HQUIC Stream)
+void QUICServer::ServerSend(HQUIC stream, void* context)
 {
+    QUICServer* this_context = (QUICServer*)context;
     //
     // Allocates and builds the buffer to send over the stream.
     //
     // QUIC_BUFFER 구조체의 크기 (포인터 + 길이 값) + 데이터 길이 만큼 할당한다.
-    void* SendBufferRaw = malloc(sizeof(QUIC_BUFFER) + SendBufferLength);
-    memset(SendBufferRaw, 0, sizeof(sizeof(QUIC_BUFFER) + SendBufferLength));
+    void* send_buffer_raw = malloc(sizeof(QUIC_BUFFER) + send_buffer_length);
+    memset(send_buffer_raw, 0, sizeof(sizeof(QUIC_BUFFER) + send_buffer_length));
 
-    if (SendBufferRaw == NULL) {
+    if (send_buffer_raw == NULL) {
         printf("SendBuffer allocation failed!\n");
-        MsQuic->StreamShutdown(Stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+        this_context->ms_quic->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
         return;
     }
-    QUIC_BUFFER* SendBuffer = (QUIC_BUFFER*)SendBufferRaw;
+    QUIC_BUFFER* send_buffer = (QUIC_BUFFER*)send_buffer_raw;
     // SendBufferRaw에는 QUIC_BUFFER 구조체 데이터가 포함되어있으므로
     // QUIC_BUFFER 만큼 더해서 포인터를 데이터의 시작 부분을 가리키도록 이동시킨다.
-    SendBuffer->Buffer = (uint8_t*)SendBufferRaw + sizeof(QUIC_BUFFER);
+    send_buffer->Buffer = (uint8_t*)send_buffer_raw + sizeof(QUIC_BUFFER);
     // 테스트를 위해 모든 비트를 1로 채우기. 마지막 바이트만 제외 (2000바이트가 전송되는지 체크)
-    memset(SendBuffer->Buffer, -1, SendBufferLength - 1);
-    SendBuffer->Buffer[SendBufferLength - 1] = 123;
+    memset(send_buffer->Buffer, -1, send_buffer_length - 1);
+    send_buffer->Buffer[send_buffer_length - 1] = 123;
     // 구조체를 제외한 데이터의 길이
-    SendBuffer->Length = SendBufferLength;
+    send_buffer->Length = send_buffer_length;
 
-    printf("[strm][%p] Sending data...\n", Stream);
+    printf("[strm][%p] Sending data...\n", stream);
 
     //
     // Sends the buffer over the stream. Note the FIN flag is passed along with
@@ -263,32 +145,32 @@ void QUICServer::ServerSend(HQUIC Stream)
     // StreamCallback 함수에서 QUIC_STREAM_EVENT_SEND_COMPLETE 부분에 clientContext의 메모리를 해제하고 있다.
     // 아무래도 네 번째 인자(전송할 필요없는 데이터도 포함되어있는 전체적인 객체), 두 번째 인자(실제로 전송할 데이터 객체)
     // 로 사용하면서 QUIC_STREAM_EVENT_SEND_COMPLETE에서 제거할 수 있도록 하는 것 같다.
-    QUIC_STATUS Status;
-    if (QUIC_FAILED(Status = MsQuic->StreamSend(Stream, SendBuffer, 1, QUIC_SEND_FLAG_FIN, SendBuffer))) {
-        printf("StreamSend failed, 0x%x!\n", Status);
-        free(SendBufferRaw);
-        MsQuic->StreamShutdown(Stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+    QUIC_STATUS status;
+    if (QUIC_FAILED(status = this_context->ms_quic->StreamSend(stream, send_buffer, 1, QUIC_SEND_FLAG_FIN, send_buffer))) {
+        printf("StreamSend failed, 0x%x!\n", status);
+        free(send_buffer_raw);
+        this_context->ms_quic->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
     }
 }
 
 QUICServer::~QUICServer()
 {
-    if(Configuration) MsQuic->ConfigurationClose(Configuration);
+    if(configuration) ms_quic->ConfigurationClose(configuration);
 
-    if(Registration) MsQuic->RegistrationClose(Registration);
+    if(registration) ms_quic->RegistrationClose(registration);
 
-    if(MsQuic) MsQuicClose(MsQuic);
+    if(ms_quic) MsQuicClose(ms_quic);
 
-    Ok = false;
+    ok = false;
     printf("Server Closed\n");
 }
 
 void QUICServer::ServerStart()
 {
-    HQUIC Listener = NULL;
-    QUIC_ADDR Address = {0}; // 내부를 보면 공용체로 sockaddr 구조체들을 가지고 있다.
-    QuicAddrSetFamily(&Address, QUIC_ADDRESS_FAMILY_UNSPEC);
-    QuicAddrSetPort(&Address, SERVER_PORT);
+    HQUIC listener = NULL;
+    QUIC_ADDR address = {0}; // 내부를 보면 공용체로 sockaddr 구조체들을 가지고 있다.
+    QuicAddrSetFamily(&address, QUIC_ADDRESS_FAMILY_UNSPEC);
+    QuicAddrSetPort(&address, SERVER_PORT);
 
     // 리스너 객체 할당
     // 서버가 quic 통신을 받기 위해서는 ListenerOpen을 통해 관련 자원을 할당해야한다.
@@ -297,7 +179,7 @@ void QUICServer::ServerStart()
     // 인자값 중에 콜백과 콘텍스트가 있는데 콜백은 통신에서 수행할 작업을 정의할 수 있고
     // 콘텍스트의 경우는 void*이며 콜백의 인자로 넘겨줄 값이다. (NULL 가능)
     // 콜백에서 필요한 상태들을 넘겨 줄 수 있다.
-    if (QUIC_FAILED(MsQuic->ListenerOpen(Registration, ServerListenerCallback, NULL, &Listener))) {
+    if (QUIC_FAILED(ms_quic->ListenerOpen(registration, ServerListenerCallback, this, &listener))) {
         printf("ListenerOpen failed!\n");
         goto Error;
     }
@@ -306,7 +188,7 @@ void QUICServer::ServerStart()
     // 마지막 인자는 sockaddr 구조체이다. NULL로 해도 알아서 할당해준다고 한다.
     // 두 번째 인자는 ALPN 목록인데 TLS 핸드셰이크 처음에 서버가 클라이언트로 전송하는 프로토콜 목록이다.
     // 적어도 하나 이상의 프로토콜을 제공해야한다.
-    if (QUIC_FAILED(MsQuic->ListenerStart(Listener, Alpn, 2, &Address))) {
+    if (QUIC_FAILED(ms_quic->ListenerStart(listener, alpn, 2, &address))) {
         printf("ListenerStart failed!\n");
         goto Error;
     }
@@ -319,10 +201,10 @@ void QUICServer::ServerStart()
     (void)getchar();
 
     Error:
-        if (Listener != NULL) {
+        if (listener != NULL) {
             // 통신 수신을 종료한다. Stop이 호출되지 않았더라도 Close에서 같이 수행해준다.
             // Listener가 가장 마지막에 호출하는 함수여야한다. 이 후에 listener의 다른 함수를 호출하면 에러가 발생한다.
             // 콜백에서 Close를 호출할 경우 데드락에 빠질 수 있다. 다만, 이벤트가 QUIC_LISTENER_EVENT_STOP_COMPLETE일 경우에는 호출해도 괜찮다.
-            MsQuic->ListenerClose(Listener);
+            ms_quic->ListenerClose(listener);
         }
 }

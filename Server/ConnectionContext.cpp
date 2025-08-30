@@ -1,0 +1,205 @@
+#include "ConnectionContext.h"
+
+/// @brief Connection의 Stream 객체들을 관리하는 클래스. 생성자에서는 상수값을 설정한다. 후에 연결이 완료되면 ConnectionContextInit()을 호출해야한다.
+/// @param ms_quic 
+/// @param quic_connection 
+ConnectionContext::ConnectionContext(const QUIC_API_TABLE *ms_quic, HQUIC quic_connection)
+: ms_quic(ms_quic)
+, quic_connection(quic_connection)
+{
+    
+}
+
+ConnectionContext::~ConnectionContext()
+{
+    delete stream_map;
+}
+
+/// @brief Connection Complete 이벤트에서 호출 http3에서 필요한 변수들을 할당한다.
+/// @return 
+bool ConnectionContext::ConnectionContextInit()
+{
+    stream_map = new StreamMap(ms_quic);
+
+    if(
+           !OpenStream(StreamTypes::UNIDIRECTION, http3_control_stream_id)
+        || !OpenStream(StreamTypes::UNIDIRECTION, http3_qpack_encoder_stream_id)
+        || !OpenStream(StreamTypes::UNIDIRECTION, http3_qpack_decoder_stream_id)) 
+    {
+        http3_stream_ok = false;
+        printf("[http3] http3 stream open fail.\n");
+    }
+    else
+    {
+        http3_stream_ok = true;
+    } 
+    return true;
+}
+
+/// @brief 스트림 생성 후 반환
+/// @param stream_type 양방향, 단방향 여부 
+/// @return 스트림 객체를 반환한다. 실패한 경우 nullptr 반환
+HQUIC ConnectionContext::GetStream(StreamTypes stream_type)
+{
+    QUIC_STATUS status;
+    HQUIC stream = NULL;
+    
+    if (QUIC_FAILED(status = ms_quic->StreamOpen(quic_connection, stream_type == StreamTypes::BIDIRECTION ? QUIC_STREAM_OPEN_FLAG_NONE : QUIC_STREAM_OPEN_FLAG_UNIDIRECTIONAL, ServerStreamCallback, this, &stream))) {
+        printf("[strm] StreamOpen failed, 0x%x!\n", status);
+        goto Error;
+    }
+
+    printf("[strm][%p] %s Starting...\n", stream, stream_type == StreamTypes::BIDIRECTION ? "Bidirection Stream" : "Unidirection Stream");
+
+    if (QUIC_FAILED(status = ms_quic->StreamStart(stream, QUIC_STREAM_START_FLAG_NONE))) {
+        printf("[strm] StreamStart failed, 0x%x!\n", status);
+        ms_quic->StreamClose(stream);
+        goto Error;
+    }
+
+    Error:
+        if (QUIC_FAILED(status)) {
+            ms_quic->ConnectionShutdown(quic_connection, QUIC_CONNECTION_SHUTDOWN_FLAG_NONE, 0);
+            return nullptr;
+        }
+    return stream;
+}
+
+/// @brief 스트림을 열고 Map에 등록 후 스트림 생성 여부 반환
+/// @param stream_type 단방향, 양방향 여부 결정
+/// @param stream_id 스트림 아이디를 받을 포인터
+/// @return 스트림 생성 여부 반환
+bool ConnectionContext::OpenStream(StreamTypes stream_type, uint64_t& stream_id)
+{
+    HQUIC stream = GetStream(stream_type);
+    if(stream == nullptr) return false;
+
+    stream_id = GetStreamId(stream);
+    StreamElement element(stream, StreamStatus::Idle);
+
+    stream_map->InsertStream(stream_id, element);
+    return true;
+}
+
+/// @brief 스트림 콜백 함수
+/// @param stream 
+/// @param context 
+/// @param event 
+/// @return 
+QUIC_STATUS QUIC_API ConnectionContext::ServerStreamCallback(HQUIC stream, void *context, QUIC_STREAM_EVENT *event)
+{
+    ConnectionContext* this_context = (ConnectionContext*)context;
+    switch (event->Type) {
+    case QUIC_STREAM_EVENT_SEND_COMPLETE:
+        //
+        // A previous StreamSend call has completed, and the context is being
+        // returned back to the app.
+        //
+        free(event->SEND_COMPLETE.ClientContext);
+        printf("[strm][%p] Data sent\n", stream);
+        break;
+    case QUIC_STREAM_EVENT_RECEIVE:
+        //
+        // Data was received from the peer on the stream.
+        //
+        printf("[strm][%p] Data received\n", stream);
+        
+        for(int i = 0; i < event->RECEIVE.BufferCount; ++i) {
+            const QUIC_BUFFER& b = event->RECEIVE.Buffers[i];
+            printf("[srv][%p] %.*s\n", stream, (int)b.Length, (const char*)b.Buffer);
+        }
+        if (event->RECEIVE.Flags & QUIC_RECEIVE_FLAG_FIN) {
+            printf("[srv][%p] <FIN received>\n", stream);
+        }
+
+        break;
+    case QUIC_STREAM_EVENT_PEER_SEND_SHUTDOWN:
+        //
+        // The peer gracefully shut down its send direction of the stream.
+        //
+        printf("[strm][%p] Peer shut down\n", stream);
+        // ServerSend(Stream);
+        break;
+    case QUIC_STREAM_EVENT_PEER_SEND_ABORTED:
+        //
+        // The peer aborted its send direction of the stream.
+        //
+        printf("[strm][%p] Peer aborted\n", stream);
+        this_context->ms_quic->StreamShutdown(stream, QUIC_STREAM_SHUTDOWN_FLAG_ABORT, 0);
+        break;
+    case QUIC_STREAM_EVENT_SHUTDOWN_COMPLETE:
+        //
+        // Both directions of the stream have been shut down and MsQuic is done
+        // with the stream. It can now be safely cleaned up.
+        //
+        printf("[strm][%p] All done\n", stream);
+        this_context->ms_quic->StreamClose(stream);
+        break;
+    default:
+        break;
+    }
+    return QUIC_STATUS_SUCCESS;
+}
+
+QUIC_STATUS QUIC_API ConnectionContext::ServerConnectionCallback(HQUIC connection, void *context, QUIC_CONNECTION_EVENT *event)
+{
+    ConnectionContext* this_context = (ConnectionContext*)context;
+
+    switch (event->Type) {
+    case QUIC_CONNECTION_EVENT_CONNECTED:
+        //
+        // The handshake has completed for the connection.
+        //
+        printf("[conn][%p] Connected\n", connection);
+        this_context->ms_quic->ConnectionSendResumptionTicket(connection, QUIC_SEND_RESUMPTION_FLAG_NONE, 0, NULL);
+        this_context->ConnectionContextInit();
+        break;
+    case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:
+        //
+        // The connection has been shut down by the transport. Generally, this
+        // is the expected way for the connection to shut down with this
+        // protocol, since we let idle timeout kill the connection.
+        //
+        if (event->SHUTDOWN_INITIATED_BY_TRANSPORT.Status == QUIC_STATUS_CONNECTION_IDLE) {
+            printf("[conn][%p] Successfully shut down on idle.\n", connection);
+        } else {
+            printf("[conn][%p] Shut down by transport, 0x%x\n", connection, event->SHUTDOWN_INITIATED_BY_TRANSPORT.Status);
+        }
+        break;
+    case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_PEER:
+        //
+        // The connection was explicitly shut down by the peer.
+        //
+        printf("[conn][%p] Shut down by peer, 0x%llu\n", connection, (unsigned long long)event->SHUTDOWN_INITIATED_BY_PEER.ErrorCode);
+        break;
+    case QUIC_CONNECTION_EVENT_SHUTDOWN_COMPLETE:
+        //
+        // The connection has completed the shutdown process and is ready to be
+        // safely cleaned up.
+        //
+        printf("[conn][%p] All done\n", connection);
+        this_context->ms_quic->ConnectionClose(connection);
+        break;
+    case QUIC_CONNECTION_EVENT_PEER_STREAM_STARTED:
+        //
+        // The peer has started/created a new stream. The app MUST set the
+        // callback handler before returning.
+        //
+        printf("[strm][%p] Peer started\n", event->PEER_STREAM_STARTED.Stream);
+        this_context->ms_quic->SetCallbackHandler(event->PEER_STREAM_STARTED.Stream, (void*)ServerStreamCallback, context);
+        break;
+    case QUIC_CONNECTION_EVENT_RESUMED:
+        //
+        // The connection succeeded in doing a TLS resumption of a previous
+        // connection's session.
+        //
+        printf("[conn][%p] Connection resumed!\n", connection);
+        break;
+    case QUIC_CONNECTION_EVENT_DATAGRAM_RECEIVED:
+        printf("[dagr] Data Received (%d bytes) : %.*s\n", (int)event->DATAGRAM_RECEIVED.Buffer->Length, (int)event->DATAGRAM_RECEIVED.Buffer->Length, (const char*)event->DATAGRAM_RECEIVED.Buffer->Buffer);
+        break;
+    default:
+        break;
+    }
+    return QUIC_STATUS_SUCCESS;
+}
