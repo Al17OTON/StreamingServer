@@ -18,6 +18,7 @@ ClientConnectionContext::ClientConnectionContext(_In_ const QUIC_API_TABLE* ms_q
 ClientConnectionContext::~ClientConnectionContext()
 {
     delete stream_map;
+    delete http3;
 }
 
 /// @brief Connection Complete 이벤트에서 호출 http3에서 필요한 변수들을 할당한다.
@@ -39,6 +40,7 @@ bool ClientConnectionContext::Http3Init()
     }
     else
     {
+        http3 = new ClientHttp3(this, http3_control_stream_id, http3_qpack_encoder_stream_id, http3_qpack_decoder_stream_id, target_domain, target_port);
         http3_stream_ok = true;
     } 
     return true;
@@ -145,16 +147,20 @@ bool ClientConnectionContext::OpenStream(StreamTypes stream_type, uint64_t& stre
     return true;
 }
 
-
-void ClientConnectionContext::DatagramSend(HQUIC connection, uint8_t *data, size_t length)
+/// @brief Datagram 전송.
+/// 데이터 유실 가능성이 있는 보안 전송
+/// 네트워크 상황에 따른 max_send_length 값으로 나누어 전송하며 도착 순서를 알 수 없다.
+/// @param data 전송할 데이터
+/// @param len data의 길이
+void ClientConnectionContext::DatagramSend(uint8_t *data, size_t len)
 {
     if(!IsConnectionOk() || !datagram_send_enabled) {
-        printf("[dagr][%p] Connection Unavailable\n", connection);
+        printf("[dagr][%p] Connection Unavailable\n", quic_connection);
         return;
     }
 
     QUIC_STATUS status;
-    printf("[dagr][%p] Sending data...\n", connection);
+    printf("[dagr][%p] Sending data...\n", quic_connection);
     // Datagram 전송의 경우 QUIC의 암호화 기능을 제외하고 모두 사용하지 못한다. 
     // StreamSend에서는 주어진 버퍼의 크기가 매우 커도 QUIC에서 알아서 나누어 전송하는 반면
     // DatagramSend에서는 MaxSendLength (MTU)의 크기 이상을 전송할 수 없다.
@@ -163,12 +169,12 @@ void ClientConnectionContext::DatagramSend(HQUIC connection, uint8_t *data, size
     // DTLS와도 유사하다고 보이는데 차이점은 다음과 같다.
     // 1. 계층이 다르다. QUIC - 전송 계층, DTLS - UDP 위에서 동작하는 보안 프로토콜
     // 2. QUIC는 손실탐지 및 혼잡제어를 제공한다.
-    while(length) {
-        uint32_t chunk = (uint16_t)(std::min)(length, (size_t)max_send_length);
+    while(len) {
+        uint32_t chunk = (uint16_t)(std::min)(len, (size_t)max_send_length);
         // QUIC_BUFFER 구조체의 크기 (포인터 + 길이 값) + 데이터 길이 만큼 할당한다.
         uint8_t* send_buffer_raw = (uint8_t*)malloc(sizeof(QUIC_BUFFER) + chunk);
         if (send_buffer_raw == NULL) {
-            printf("[dagr][%p] SendBuffer allocation failed!\n", connection);
+            printf("[dagr][%p] SendBuffer allocation failed!\n", quic_connection);
             status = QUIC_STATUS_OUT_OF_MEMORY;
             return;
         }
@@ -180,17 +186,27 @@ void ClientConnectionContext::DatagramSend(HQUIC connection, uint8_t *data, size
         send_buffer->Length = chunk;
         memcpy(send_buffer->Buffer, data, chunk);
         
-        if(QUIC_FAILED(status = ms_quic->DatagramSend(connection, send_buffer, 1, QUIC_SEND_FLAG_NONE, send_buffer))) {
+        if(QUIC_FAILED(status = ms_quic->DatagramSend(quic_connection, send_buffer, 1, QUIC_SEND_FLAG_NONE, send_buffer))) {
             printf("[dagr] DatagramSend failed, 0x%x!\n", status);
             free(send_buffer_raw);
         }
 
-        length -= chunk;
+        len -= chunk;
         data += chunk;
     }
 }
 
-void ClientConnectionContext::StreamSend(_In_ HQUIC stream, uint8_t* data, size_t length, bool fin)
+void ClientConnectionContext::StreamSendById(int64_t stream_id, uint8_t *data, size_t len, bool fin)
+{
+    StreamSend(stream_map->GetStreamById(stream_id)->stream, data, len, fin);
+}
+
+void ClientConnectionContext::StreamSendById(int64_t stream_id, QUIC_BUFFER *buffers, size_t buffers_len, bool fin)
+{
+    StreamSend(stream_map->GetStreamById(stream_id)->stream, buffers, buffers_len, fin);
+}
+
+void ClientConnectionContext::StreamSend(_In_ HQUIC stream, uint8_t* data, size_t len, bool fin)
 {
     if(!IsConnectionOk()) {
         printf("[strm] Connection Unavailable\n");
@@ -203,7 +219,7 @@ void ClientConnectionContext::StreamSend(_In_ HQUIC stream, uint8_t* data, size_
     //
     // Allocates and builds the buffer to send over the stream.
     //
-    send_buffer_raw = (uint8_t*)malloc(sizeof(QUIC_BUFFER) + length);
+    send_buffer_raw = (uint8_t*)malloc(sizeof(QUIC_BUFFER) + len);
     if (send_buffer_raw == NULL) {
         printf("[strm] SendBuffer allocation failed!\n");
         status = QUIC_STATUS_OUT_OF_MEMORY;
@@ -211,8 +227,8 @@ void ClientConnectionContext::StreamSend(_In_ HQUIC stream, uint8_t* data, size_
     }
     send_buffer = (QUIC_BUFFER*)send_buffer_raw;
     send_buffer->Buffer = send_buffer_raw + sizeof(QUIC_BUFFER);
-    send_buffer->Length = static_cast<uint32_t>(length);
-    std::memcpy(send_buffer->Buffer, data, length);
+    send_buffer->Length = static_cast<uint32_t>(len);
+    std::memcpy(send_buffer->Buffer, data, len);
 
     printf("[strm][%p] Sending data...\n", stream);
 
@@ -224,6 +240,26 @@ void ClientConnectionContext::StreamSend(_In_ HQUIC stream, uint8_t* data, size_
     if (QUIC_FAILED(status = ms_quic->StreamSend(stream, send_buffer, 1, fin ? QUIC_SEND_FLAG_FIN : QUIC_SEND_FLAG_NONE, send_buffer))) {
         printf("[strm] StreamSend failed, 0x%x!\n", status);
         free(send_buffer_raw);
+    }
+}
+
+void ClientConnectionContext::StreamSend(HQUIC stream, QUIC_BUFFER *send_buffer, size_t buffer_len, bool fin)
+{
+    if(!IsConnectionOk()) {
+        printf("[strm] Connection Unavailable\n");
+        return;
+    }
+    QUIC_STATUS status;
+    printf("[strm][%p] Sending data...\n", stream);
+
+    //
+    // Sends the buffer over the stream. Note the FIN flag is passed along with
+    // the buffer. This indicates this is the last buffer on the stream and the
+    // the stream is shut down (in the send direction) immediately after.
+    //
+    if (QUIC_FAILED(status = ms_quic->StreamSend(stream, send_buffer, 1, fin ? QUIC_SEND_FLAG_FIN : QUIC_SEND_FLAG_NONE, send_buffer))) {
+        printf("[strm] StreamSend failed, 0x%x!\n", status);
+        free(send_buffer);
     }
 }
 

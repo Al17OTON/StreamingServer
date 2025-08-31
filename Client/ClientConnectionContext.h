@@ -4,12 +4,13 @@
 #include <msquic.h>
 #include <nghttp3/nghttp3.h>
 #include "StreamMap.h"
+#include "ClientHttp3.h"
 
 enum class StreamTypes : uint8_t {
         BIDIRECTION,
         UNIDIRECTION
     };
-    
+
 //log 기록을 위한 환경변수명. 동작을 위해서는 같은 이름의 환경변수를 OS에 등록해주어야한다.
 constexpr char                      ssl_key_log_env_var[] = "SSLKEYLOGFILE";
 
@@ -22,6 +23,7 @@ private:
     const HQUIC                     quic_connection;
     bool                            connection_ok = false;
 
+    ClientHttp3*                    http3;
     uint64_t                        http3_control_stream_id;
     uint64_t                        http3_qpack_encoder_stream_id;
     uint64_t                        http3_qpack_decoder_stream_id;
@@ -57,8 +59,8 @@ private:
     HQUIC GetStream(StreamTypes stream_type);
     bool OpenStream(StreamTypes stream_type, uint64_t& stream_id);
 
-    void StreamSend(_In_ HQUIC stream, uint8_t* data, size_t length, bool fin);
-    void DatagramSend(_In_ HQUIC connection, uint8_t* data, size_t length);
+    void StreamSend(_In_ HQUIC stream, uint8_t* data, size_t len, bool fin);
+    void StreamSend(_In_ HQUIC stream, QUIC_BUFFER* send_buffer, size_t buffer_len, bool fin);
 
     inline bool IsBidirectionStream(_In_ HQUIC stream) {
         // 스트림 아이디에서 0번 비트는 발신자를 의미하고 1번 비트는 단,양방향 통신을 의미한다.
@@ -92,7 +94,17 @@ public:
     void Post(uint8_t* data, size_t len, bool fin) {
         StreamSend(GetStream(StreamTypes::BIDIRECTION), data, len, fin);
     }
+    void DatagramSend(uint8_t* data, size_t len);
+    void StreamSendById(int64_t stream_id, uint8_t* data, size_t len, bool fin);
+    void StreamSendById(int64_t stream_id, QUIC_BUFFER* buffers, size_t buffers_len, bool fin);
+
+    void test() {
+        uint64_t stream_id;
+        if(!OpenStream(StreamTypes::BIDIRECTION, stream_id)) return;
+        http3->Send(stream_id, this);
+    }
 
     void ConnectionShutdown(bool send_notify, QUIC_UINT62 error_code);
     inline bool IsConnectionOk() {return connection_ok;}
+    inline bool IsHttp3StreamOk() {return http3_stream_ok;}
 };
