@@ -42,7 +42,23 @@ int main() {
 
     while(!client_context->IsConnectionOk());
 
-    client_context->Post((uint8_t*)"client hello", 12, true);
+    // client_context->Post((uint8_t*)"client hello", 12, true);
+    
+    // // Datagram 전송 테스트
+    // size_t len = 3000;
+    // uint8_t* msg = (uint8_t*)malloc(len);
+    // memset(msg, 65, 1000);
+    // memset(msg + 1000, 66, 1000);
+    // memset(msg + 2000, 67, 1000);
+    // client_context->DatagramSend(msg, len);
+    // free(msg);
+
+    client_context->Http3Init();
+    
+    while(!client_context->IsHttp3StreamOk());
+
+    client_context->test();
+
     Sleep(10000);
     client_context->ConnectionShutdown(true, 0);
 }
