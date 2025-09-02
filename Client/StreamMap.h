@@ -64,4 +64,11 @@ public:
         
         return (GetStreamId(stream) & 0x2) == 0;
     }
+
+    void Print() {
+        for (auto it = map.begin(); it != map.end(); ++it) {
+            std::cout << " {" << it->first << " : " << it->second.stream << "} ";
+        }
+        printf("\n");
+    }
 };

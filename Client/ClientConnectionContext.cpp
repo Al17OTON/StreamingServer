@@ -37,6 +37,7 @@ bool ClientConnectionContext::Http3Init()
     {
         http3_stream_ok = false;
         printf("[http3] http3 stream open fail.\n");
+        return false;
     }
     else
     {
@@ -144,6 +145,9 @@ bool ClientConnectionContext::OpenStream(StreamTypes stream_type, uint64_t& stre
     StreamElement element(stream, StreamStatus::Idle);
 
     stream_map->InsertStream(stream_id, element);
+
+    stream_map->Print();
+
     return true;
 }
 
