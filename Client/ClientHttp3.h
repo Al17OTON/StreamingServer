@@ -45,7 +45,6 @@ private:
 
     const char*                         target_domain;
     const uint16_t                      target_port;
-    const char*                         authority;
 
     const int64_t                       control_stream_id;
     const int64_t                       qpack_enc_stream_id;
@@ -163,7 +162,7 @@ private:
     }
 
 public:
-    ClientHttp3(_In_ void* client_connection_context, int64_t control_stream_id, int64_t qpack_enc_stream_id, int64_t qpack_dec_stream_id, _In_z_ const char* target_doamin, uint16_t target_port);
+    ClientHttp3(_In_ void* client_connection_context, int64_t control_stream_id, int64_t qpack_enc_stream_id, int64_t qpack_dec_stream_id, _In_z_ const char* target_domain, uint16_t target_port);
     ~ClientHttp3();
 
     void Send(int64_t stream_id, void* quic_connection);

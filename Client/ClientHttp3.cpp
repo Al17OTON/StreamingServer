@@ -3,13 +3,12 @@
 // #pragma once에 의해 다른 한 헤더파일에서는 빈 헤더파일을 참조하게된다.
 #include "ClientConnectionContext.h"
 
-ClientHttp3::ClientHttp3(_In_ void* client_connection_context, int64_t control_stream_id, int64_t qpack_enc_stream_id, int64_t qpack_dec_stream_id, _In_z_ const char* target_doamin, uint16_t target_port)
+ClientHttp3::ClientHttp3(_In_ void* client_connection_context, int64_t control_stream_id, int64_t qpack_enc_stream_id, int64_t qpack_dec_stream_id, _In_z_ const char* target_domain, uint16_t target_port)
 : control_stream_id(control_stream_id)
 , qpack_enc_stream_id(qpack_enc_stream_id)
 , qpack_dec_stream_id(qpack_dec_stream_id)
 , target_domain(target_domain)
 , target_port(target_port)
-, authority((std::string(target_doamin) + ":" + std::to_string(target_port)).c_str())
 {
     
     nghttp3_settings settings;
@@ -50,7 +49,7 @@ void ClientHttp3::Send(int64_t stream_id, void* quic_connection)
     nghttp3_nv name_value_arr[] = {
         { (uint8_t*)":method", (uint8_t*)"GET", 7, 3, NGHTTP3_NV_FLAG_NONE },
         { (uint8_t*)":scheme", (uint8_t*)"https", 7, 5, NGHTTP3_NV_FLAG_NONE },
-        { (uint8_t*)":authority", (uint8_t*)authority, 10, (size_t)strlen(authority), NGHTTP3_NV_FLAG_NONE },
+        { (uint8_t*)":authority", (uint8_t*)target_domain, 10, (size_t)strlen(target_domain), NGHTTP3_NV_FLAG_NONE },
         { (uint8_t*)":path", (uint8_t*)"/", 5, 1, NGHTTP3_NV_FLAG_NONE },
         // 필요 시 일반 헤더 추가
         // { (uint8_t*)"user-agent",10,(uint8_t*)"h3-test",7, NGHTTP3_NV_FLAG_NONE },
