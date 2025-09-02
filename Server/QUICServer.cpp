@@ -1,5 +1,7 @@
 #include "QUICServer.h"
 
+ConnectionMap QUICServer::connection_map{};
+
 QUICServer::QUICServer()
 {
     if(ok) {
@@ -35,20 +37,30 @@ QUIC_STATUS QUIC_API QUICServer::ServerListenerCallback(HQUIC listener, void *co
     QUICServer* this_context = (QUICServer*)context;
     UNREFERENCED_PARAMETER(listener);
     QUIC_STATUS status = QUIC_STATUS_NOT_SUPPORTED;
+
+    // 불필요한 연결 제거
+    this_context->connection_map.ConnectionCloseJob();
+
     switch (event->Type) {
-    case QUIC_LISTENER_EVENT_NEW_CONNECTION:
+    case QUIC_LISTENER_EVENT_NEW_CONNECTION: {
         //
         // A new connection is being attempted by a client. For the handshake to
         // proceed, the server must provide a configuration for QUIC to use. The
         // app MUST set the callback handler before returning.
         //
+        
+        uint64_t connection_id = this_context->connection_map.GenerateConnectionId();
+        ServerConnectionContext* server_connection_context = new ServerConnectionContext(this_context->ms_quic, event->NEW_CONNECTION.Connection, connection_id);
+
         // 콜백을 지정된 HQUIC 객체에 적용한다. (리스너, 스트림, 등등)
-        this_context->ms_quic->SetCallbackHandler(event->NEW_CONNECTION.Connection, (void*)ServerConnectionContext::ServerConnectionCallback, new ServerConnectionContext(this_context->ms_quic, event->NEW_CONNECTION.Connection));
+        this_context->ms_quic->SetCallbackHandler(event->NEW_CONNECTION.Connection, (void*)ServerConnectionContext::ServerConnectionCallback, server_connection_context);
+        this_context->connection_map.InsertConnection(connection_id, server_connection_context);
         // 클라이언트가 연결을 시도하고 있으므로 QUIC Handshake를 하도록 설정한다.
         // QUIC_LISTENER_EVENT_NEW_CONNECTION 내부에서 사용할 것을 권장하며 
         // 어떠한 설정을 사용할지 결정하는 비동기 작업을 수행 등과 같은 경우에는 외부에서 호출해도 된다고 한다.
         status = this_context->ms_quic->ConnectionSetConfiguration(event->NEW_CONNECTION.Connection, this_context->configuration);
         break;
+    }
     default:
         break;
     }

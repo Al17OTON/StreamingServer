@@ -1,8 +1,11 @@
 #pragma once
 #include <msquic.h>
-#include <stdio.h>
+#include <iostream>
 #include <cstdlib>
+#include <atomic>
+#include <queue>
 #include "ServerConnectionContext.h"
+#include "ConnectionMap.h"
 
 //https://github.com/microsoft/msquic/blob/main/docs/API.md
 //https://github.com/microsoft/msquic/blob/main/src/tools/sample/sample.c (예제)
@@ -87,6 +90,9 @@ const static uint32_t               send_buffer_length = 15000;
 // 서버가 정상적으로 동작하는지 체크하는 함수
 bool ok = false;
 
+// Connection 관리 객체
+static ConnectionMap                connection_map;
+
 static
 _IRQL_requires_max_(PASSIVE_LEVEL)
 _Function_class_(QUIC_LISTENER_CALLBACK)
@@ -105,4 +111,8 @@ public:
     void ServerStart();
 
     inline bool IsOk() {return ok;}
+
+    static void RegisterConnectionRemove(uint64_t id) {
+        connection_map.RegisterConnectionRemove(id);
+    }
 };
