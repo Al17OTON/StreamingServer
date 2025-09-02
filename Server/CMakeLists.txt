@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 project(Server)
 
 find_package(FFMPEG REQUIRED)
@@ -7,7 +11,7 @@ find_package(msquic CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(nghttp3 CONFIG REQUIRED)
 
-add_executable(Server main.cpp QUICServer.cpp ServerConnectionContext.cpp)
+add_executable(Server main.cpp QUICServer.cpp ServerConnectionContext.cpp ServerHttp3.cpp)
 
 target_link_libraries(Server PRIVATE msquic)
 target_include_directories(Server PRIVATE ${FFMPEG_INCLUDE_DIRS})
