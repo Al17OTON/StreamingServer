@@ -2,6 +2,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <msquic.h>
+#include "ReceiverInterface.h"
 
 enum class StreamStatus : uint8_t {
     Idle,
@@ -15,7 +16,12 @@ enum class StreamStatus : uint8_t {
 struct StreamElement {
     HQUIC stream = nullptr;
     StreamStatus status;
-    StreamElement(_In_ HQUIC stream, StreamStatus status) : stream(stream), status(status) {}
+    ReceiverInterface* receiver;
+    StreamElement(_In_ HQUIC stream, StreamStatus status, _In_ ReceiverInterface* receiver) 
+    : stream(stream)
+    ,status(status)
+    ,receiver(receiver) 
+    {}
 };
 
 class StreamMap {
@@ -63,5 +69,12 @@ public:
     bool IsBidirectionStream(_In_ HQUIC stream) {
         
         return (GetStreamId(stream) & 0x2) == 0;
+    }
+
+    void Print() {
+        for (auto it = map.begin(); it != map.end(); ++it) {
+            std::cout << " {" << it->first << " : " << it->second.stream << "} ";
+        }
+        printf("\n");
     }
 };

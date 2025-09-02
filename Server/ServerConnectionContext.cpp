@@ -1,11 +1,13 @@
 #include "ServerConnectionContext.h"
+#include "QUICServer.h"
 
 /// @brief Connection의 Stream 객체들을 관리하는 클래스. 생성자에서는 상수값을 설정한다. 후에 연결이 완료되면 ConnectionContextInit()을 호출해야한다.
 /// @param ms_quic 
 /// @param quic_connection 
-ServerConnectionContext::ServerConnectionContext(const QUIC_API_TABLE *ms_quic, HQUIC quic_connection)
+ServerConnectionContext::ServerConnectionContext(const QUIC_API_TABLE *ms_quic, HQUIC quic_connection, uint64_t id)
 : ms_quic(ms_quic)
 , quic_connection(quic_connection)
+, id(id)
 {
     stream_map = new StreamMap(ms_quic);
 }
@@ -13,25 +15,37 @@ ServerConnectionContext::ServerConnectionContext(const QUIC_API_TABLE *ms_quic, 
 ServerConnectionContext::~ServerConnectionContext()
 {
     delete stream_map;
+    delete http3;
 }
 
 /// @brief Connection Complete 이벤트에서 호출 http3에서 필요한 변수들을 할당한다.
 /// @return 
-bool ServerConnectionContext::Http3Init()
+void ServerConnectionContext::Http3Init()
 {
-    if(
-           !OpenStream(StreamTypes::UNIDIRECTION, http3_control_stream_id)
-        || !OpenStream(StreamTypes::UNIDIRECTION, http3_qpack_encoder_stream_id)
-        || !OpenStream(StreamTypes::UNIDIRECTION, http3_qpack_decoder_stream_id)) 
-    {
-        http3_stream_ok = false;
-        printf("[http3] http3 stream open fail.\n");
+    printf("[http3] Http Init...\n");
+    QUIC_STATUS status;
+
+    http3 = new ServerHttp3(this);
+    
+    http3_control_stream = GetStream(StreamTypes::UNIDIRECTION);
+    http3_qpack_encoder_stream = GetStream(StreamTypes::UNIDIRECTION);
+    http3_qpack_decoder_stream = GetStream(StreamTypes::UNIDIRECTION);
+    
+    // pending_stream.insert({http3_control_stream, http3});
+    // pending_stream.insert({http3_qpack_decoder_stream, http3});
+    // pending_stream.insert({http3_qpack_encoder_stream, http3});
+
+    uint32_t size = sizeof(http3_control_stream_id);
+    while(QUIC_FAILED(status = ms_quic->GetParam(http3_control_stream, QUIC_PARAM_STREAM_ID, &size, &http3_control_stream_id)));
+    while(QUIC_FAILED(status = ms_quic->GetParam(http3_qpack_encoder_stream, QUIC_PARAM_STREAM_ID, &size, &http3_qpack_encoder_stream_id)));
+    while(QUIC_FAILED(status = ms_quic->GetParam(http3_qpack_decoder_stream, QUIC_PARAM_STREAM_ID, &size, &http3_qpack_decoder_stream_id)));
+
+    if(!http3->SetControlStreamId(http3_control_stream_id) ||
+        !http3->SetQPACKStreamId(http3_qpack_encoder_stream_id, http3_qpack_decoder_stream_id)) {
+        return;
     }
-    else
-    {
-        http3_stream_ok = true;
-    } 
-    return true;
+    printf("[http3] http3 stream open success.\n");
+    http3_stream_ok = true;
 }
 
 /// @brief 스트림 생성 후 반환
@@ -49,7 +63,7 @@ HQUIC ServerConnectionContext::GetStream(StreamTypes stream_type)
 
     printf("[strm][%p] %s Starting...\n", stream, stream_type == StreamTypes::BIDIRECTION ? "Bidirection Stream" : "Unidirection Stream");
 
-    if (QUIC_FAILED(status = ms_quic->StreamStart(stream, QUIC_STREAM_START_FLAG_NONE))) {
+    if (QUIC_FAILED(status = ms_quic->StreamStart(stream, QUIC_STREAM_START_FLAG_IMMEDIATE))) {
         printf("[strm] StreamStart failed, 0x%x!\n", status);
         ms_quic->StreamClose(stream);
         goto Error;
@@ -72,10 +86,10 @@ bool ServerConnectionContext::OpenStream(StreamTypes stream_type, uint64_t& stre
     HQUIC stream = GetStream(stream_type);
     if(stream == nullptr) return false;
 
-    stream_id = GetStreamId(stream);
-    StreamElement element(stream, StreamStatus::Idle);
+    // stream_id = GetStreamId(stream);
+    // StreamElement element(stream, StreamStatus::Idle);
 
-    stream_map->InsertStream(stream_id, element);
+    // stream_map->InsertStream(stream_id, element);
     return true;
 }
 
@@ -87,7 +101,17 @@ bool ServerConnectionContext::OpenStream(StreamTypes stream_type, uint64_t& stre
 QUIC_STATUS QUIC_API ServerConnectionContext::ServerStreamCallback(HQUIC stream, void *context, QUIC_STREAM_EVENT *event)
 {
     ServerConnectionContext* this_context = (ServerConnectionContext*)context;
+    uint64_t stream_id = this_context->GetStreamId(stream);
+
     switch (event->Type) {
+    case QUIC_STREAM_EVENT_START_COMPLETE: {
+
+        printf("[strm][%p] Stream Start Complete. ID : %lu\n", stream, event->START_COMPLETE.ID);
+        // ReceiverInterface* receiver = this_context->pending_stream.at(stream);
+        // this_context->pending_stream.erase(stream);
+        this_context->InsertStreamMap(event->START_COMPLETE.ID, StreamElement(stream, StreamStatus::Idle, nullptr));
+        break;
+    }
     case QUIC_STREAM_EVENT_SEND_COMPLETE:
         //
         // A previous StreamSend call has completed, and the context is being
@@ -96,21 +120,27 @@ QUIC_STATUS QUIC_API ServerConnectionContext::ServerStreamCallback(HQUIC stream,
         free(event->SEND_COMPLETE.ClientContext);
         printf("[strm][%p] Data sent\n", stream);
         break;
-    case QUIC_STREAM_EVENT_RECEIVE:
+    case QUIC_STREAM_EVENT_RECEIVE: {
         //
         // Data was received from the peer on the stream.
         //
         printf("[strm][%p] Data received\n", stream);
         
-        for(int i = 0; i < event->RECEIVE.BufferCount; ++i) {
-            const QUIC_BUFFER& b = event->RECEIVE.Buffers[i];
-            printf("[srv][%p] %.*s\n", stream, (int)b.Length, (const char*)b.Buffer);
-        }
+        // for(int i = 0; i < event->RECEIVE.BufferCount; ++i) {
+        //     const QUIC_BUFFER& b = event->RECEIVE.Buffers[i];
+        //     // printf("[srv][%p] %.*s\n", stream, (int)b.Length, (const char*)b.Buffer);
+        //     hexdump(b.Buffer, b.Length);
+        // }
+        this_context->stream_map->Print();
+        // this_context->stream_map->GetStreamById(stream_id)->receiver->Read(stream_id, event);
+        long int n = this_context->http3->Read(stream_id, event);
+
         if (event->RECEIVE.Flags & QUIC_RECEIVE_FLAG_FIN) {
             printf("[srv][%p] <FIN received>\n", stream);
         }
 
         break;
+    }
     case QUIC_STREAM_EVENT_PEER_SEND_SHUTDOWN:
         //
         // The peer gracefully shut down its send direction of the stream.
@@ -144,14 +174,19 @@ QUIC_STATUS QUIC_API ServerConnectionContext::ServerConnectionCallback(HQUIC con
     ServerConnectionContext* this_context = (ServerConnectionContext*)context;
 
     switch (event->Type) {
-    case QUIC_CONNECTION_EVENT_CONNECTED:
+    case QUIC_CONNECTION_EVENT_CONNECTED: {
         //
         // The handshake has completed for the connection.
         //
         printf("[conn][%p] Connected\n", connection);
         this_context->ms_quic->ConnectionSendResumptionTicket(connection, QUIC_SEND_RESUMPTION_FLAG_NONE, 0, NULL);
-        this_context->Http3Init();
+        
+        // Stream ID 발급까지 대기하는 스레드 호출
+        std::thread http3_init_thread(&ServerConnectionContext::Http3Init, this_context);
+        http3_init_thread.detach();
+
         break;
+    }
     case QUIC_CONNECTION_EVENT_SHUTDOWN_INITIATED_BY_TRANSPORT:
         //
         // The connection has been shut down by the transport. Generally, this
@@ -177,6 +212,7 @@ QUIC_STATUS QUIC_API ServerConnectionContext::ServerConnectionCallback(HQUIC con
         //
         printf("[conn][%p] All done\n", connection);
         this_context->ms_quic->ConnectionClose(connection);
+        QUICServer::RegisterConnectionRemove(this_context->id);
         break;
     case QUIC_CONNECTION_EVENT_PEER_STREAM_STARTED:
         //

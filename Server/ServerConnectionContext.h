@@ -3,7 +3,9 @@
 #include <iostream>
 #include <msquic.h>
 #include <nghttp3/nghttp3.h>
+#include <thread>
 #include "StreamMap.h"
+#include "ServerHttp3.h"
 
 enum class StreamTypes : uint8_t {
         BIDIRECTION,
@@ -12,10 +14,19 @@ enum class StreamTypes : uint8_t {
 
 class ServerConnectionContext {
 private:
+    const uint64_t                  id;
+
     StreamMap*                      stream_map;
 
+    // std::unordered_map
+    // <HQUIC, ReceiverInterface*>     pending_stream;
+    
     const HQUIC                     quic_connection;
 
+    ServerHttp3*                    http3;
+    HQUIC                           http3_control_stream;
+    HQUIC                           http3_qpack_encoder_stream;
+    HQUIC                           http3_qpack_decoder_stream;
     uint64_t                        http3_control_stream_id;
     uint64_t                        http3_qpack_encoder_stream_id;
     uint64_t                        http3_qpack_decoder_stream_id;
@@ -44,11 +55,23 @@ private:
         ms_quic->GetParam(stream, QUIC_PARAM_STREAM_ID, &size, &stream_id);
         return stream_id;
     }
+
+    void InsertStreamMap(uint64_t key, _In_ StreamElement value) {
+        stream_map->InsertStream(key, value);
+    }
+
+    static void hexdump(const uint8_t* p, size_t n) {
+        for (size_t i = 0; i < n; ++i) {
+            printf("%02X ", p[i]);
+            if ((i & 0x0F) == 0x0F) printf("\n");
+        }
+        if (n && ((n - 1) & 0x0F) != 0x0F) printf("\n");
+    }
 public:
     const QUIC_API_TABLE*           ms_quic;
-    ServerConnectionContext(_In_ const QUIC_API_TABLE* ms_quic, _In_ HQUIC quic_connection);
+    ServerConnectionContext(_In_ const QUIC_API_TABLE* ms_quic, _In_ HQUIC quic_connection, uint64_t id);
     ~ServerConnectionContext();
-    bool Http3Init();
+    void Http3Init();
 
     // 클라이언트와 연결되었을 때(QUIC handshake 종료 후) 수행할 동작 정의
     static
