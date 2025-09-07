@@ -81,4 +81,8 @@ public:
     QUIC_API
     ServerConnectionCallback(_In_ HQUIC connection, _In_opt_ void* context, _Inout_ QUIC_CONNECTION_EVENT* event);
 
+    bool IsStreamIdAvailable(_In_ HQUIC stream);
+    HQUIC GetStreamById(uint64_t stream_id);
+
+    StreamCtx* SetHttp3Context(uint64_t stream_id);
 };
