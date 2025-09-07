@@ -1,6 +1,22 @@
 {
   "dependencies": [
-    "fmt",
-    "msquic"
+    {
+      "name": "ffmpeg",
+      "features": [
+        "x264"
+      ]
+    },
+    {
+      "name": "msquic",
+      "features": [
+        "0-rtt"
+      ]
+    },
+    "nlohmann-json",
+    "nghttp3"
+  ],
+  "overrides" : [
+    {"name" : "opencv", "version" : "4.11.0", "port-version" : 0},
+    {"name" : "ffmpeg", "version" : "7.1.1", "port-version" : 4}
   ]
 }

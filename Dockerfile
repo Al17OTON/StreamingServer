@@ -4,6 +4,13 @@ RUN apt update
 RUN apt install -y vim openssh-server build-essential gdb rsync zip libssl-dev pkg-config x11-apps usbutils
 RUN apt install -y cmake g++ wget unzip
 RUN apt install -y libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-x gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-gtk3 gstreamer1.0-qt5 gstreamer1.0-pulseaudio
+
+# vcpkg ffmpeg가 nasm을 필요로 함
+RUN apt install -y nasm
+
+# 캡쳐를 위한 와이어샤크
+RUN apt install -y wireshark-common
+RUN chmod +x /usr/bin/dumpcap 
 # VCPKG
 RUN apt install -y git ca-certificates curl ninja-build
 
